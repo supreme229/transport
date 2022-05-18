@@ -1,6 +1,6 @@
 #include "utils.h"
 
-bool ValidateInput(int argc, char *argv[]) {
+bool validateInput(int argc, char *argv[]) {
   if (argc != 5) {
     return false;
   }

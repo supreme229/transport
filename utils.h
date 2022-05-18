@@ -7,4 +7,4 @@
 
 using namespace std;
 
-bool ValidateInput(int argc, char *argv[]);
+bool validateInput(int argc, char *argv[]);
