@@ -1,9 +1,10 @@
 #include "transport.h"
 
-Transport::Transport(char *argv[]) : ip_addr(argv[1]), port(htons(stoi((string)argv[2]))), file_name(argv[3]), file_size(stoi((string)argv[4])), bytes_left(file_size)
+Transport::Transport(char *argv[]) : ip_addr(argv[1]), port(htons(stoi((string)argv[2]))), file_name(argv[3]), file_size(stoi((string)argv[4])), bytes_left(file_size), window(file_size), idx(0)
 {
     file = fopen(file_name, "w");
 }
+
 bool Transport::socketSetup()
 {
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -47,14 +48,16 @@ int Transport::calculateBytes()
     return min(bytes_left, min(file_size, MAX_DATA_LEN));
 }
 
-bool Transport::sendDatagram(int position)
+bool Transport::sendDatagram(int *start_checker)
 {
-    int bytes_to_receive = calculateBytes();
+    Segment segment = window.getFirstNotAck();
 
     char message[40];
-    sprintf(message, "GET %d %d\n", position, bytes_to_receive);
+    strcpy(message, segment.send);
 
     int message_len = strlen(message);
+
+    *start_checker = segment.start;
 
     if (sendto(sockfd, message, message_len, 0, (struct sockaddr *)&server_address, sizeof(server_address)) != message_len)
     {
@@ -71,8 +74,8 @@ bool Transport::receivedInTime()
     FD_SET(sockfd, &descriptors);
 
     struct timeval tv;
-    tv.tv_sec = 1;
-    tv.tv_usec = 0;
+    tv.tv_sec = 0;
+    tv.tv_usec = 250000;
 
     int ready = select(sockfd + 1, &descriptors, NULL, NULL, &tv);
 
@@ -89,6 +92,7 @@ bool Transport::receivePacket(int *start, int *datagram_len, int *bytes_received
     struct sockaddr_in sender;
     socklen_t sender_len = sizeof(sender);
     bzero(&sender, sizeof(sender));
+
     *datagram_len = recvfrom(sockfd, data, IP_MAXPACKET, 0, (struct sockaddr *)&sender, &sender_len);
 
     if (sender.sin_port != port || strcmp(inet_ntoa(sender.sin_addr), ip_addr) != 0)
@@ -107,15 +111,17 @@ bool Transport::receivePacket(int *start, int *datagram_len, int *bytes_received
 
     sscanf((const char *)data, "DATA %d %d\n", start, bytes_received);
 
+    window.setSegmentAck(*start);
+
     return EXIT_SUCCESS;
 }
 
 void Transport::receiveFile()
 {
-    int bytes_read = 0;
     while (bytes_left > 0)
     {
-        sendDatagram(bytes_read);
+        int start_checker = 0;
+        sendDatagram(&start_checker);
         if (receivedInTime())
         {
             int bytes_received = 0, datagram_len = 0, start = 0;
@@ -123,12 +129,14 @@ void Transport::receiveFile()
 
             if (receivePacket(&start, &datagram_len, &bytes_received, data) == EXIT_SUCCESS)
             {
-                if (start != bytes_read)
+                if (start != start_checker)
                     continue;
+
                 bytes_left -= bytes_received;
-                bytes_read += bytes_received;
+
                 fwrite(data + datagram_len - bytes_received, sizeof(char), bytes_received, file);
             }
+            cout << "Bytes left: " << bytes_left << endl;
         }
     }
     fclose(file);

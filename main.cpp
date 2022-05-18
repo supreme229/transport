@@ -1,7 +1,9 @@
 #include <iostream>
 
-#include "transport.h"
 #include "utils.h"
+
+#include "transport.h"
+#include "window.h"
 
 using namespace std;
 
@@ -19,6 +21,10 @@ int main(int argc, char *argv[])
 	if(transport.setup()){
 		return -1;
 	}
+
+	//Window window(stoi(argv[4]));
+
+	
 
 	transport.receiveFile();
 

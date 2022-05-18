@@ -12,6 +12,8 @@
 #include <errno.h>
 #include <chrono>
 
+#include "window.h"
+
 #define MAX_DATA_LEN 1000
 
 using namespace std;
@@ -21,33 +23,38 @@ class Transport
 public:
     Transport(char *argv[]);
     void receiveFile();
-    bool sendDatagram(int position);
+    bool sendDatagram(int *start_checker);
     void receiveData();
     bool setup();
 
-// socket data
+    // socket data
 private:
     bool socketSetup();
     int sockfd;
     fd_set descriptors;
 
-// server address data
+    // server address data
 private:
     bool serverAddressSetup();
     struct sockaddr_in server_address;
 
-// input data
+    // input data
 private:
     char *ip_addr;
     int port;
     char *file_name;
     int file_size;
 
-// file receiving
+    // file receiving
 private:
     int calculateBytes();
     bool receivedInTime();
-    bool receivePacket(int *start, int *datagram_len,int *bytes_received, char *data);
-    FILE* file;
+    bool receivePacket(int *start, int *datagram_len, int *bytes_received, char *data);
+    FILE *file;
     int bytes_left;
+
+    // window data
+private:
+    Window window;
+    int idx;
 };
