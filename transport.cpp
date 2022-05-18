@@ -1,7 +1,9 @@
 #include "transport.h"
 
-Transport::Transport(char *argv[]) : ip_addr(argv[1]), port(stoi((string)argv[2])), file_name(argv[3]), file_size(stoi((string)argv[4])), file(file_name), bytes_left(file_size) {}
-
+Transport::Transport(char *argv[]) : ip_addr(argv[1]), port(stoi((string)argv[2])), file_name(argv[3]), file_size(stoi((string)argv[4])), bytes_left(file_size)
+{
+    file = fopen(file_name, "w");
+}
 bool Transport::socketSetup()
 {
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -51,8 +53,6 @@ bool Transport::sendDatagram(int position)
     char message[40];
     sprintf(message, "GET %d %d\n", position, bytes_to_receive);
 
-    cout << message << endl;
-
     int message_len = strlen(message);
 
     if (sendto(sockfd, message, message_len, 0, (struct sockaddr *)&server_address, sizeof(server_address)) != message_len)
@@ -70,7 +70,7 @@ bool Transport::receivedInTime()
     FD_SET(sockfd, &descriptors);
 
     struct timeval tv;
-    tv.tv_sec = 3;
+    tv.tv_sec = 1;
     tv.tv_usec = 0;
 
     int ready = select(sockfd + 1, &descriptors, NULL, NULL, &tv);
@@ -83,14 +83,14 @@ bool Transport::receivedInTime()
     return true;
 }
 
-bool Transport::receivePacket(int *bytes_received)
+bool Transport::receivePacket(int *start, int *datagram_len, int *bytes_received, char *data)
 {
     struct sockaddr_in sender;
     socklen_t sender_len = sizeof(sender);
-    u_int8_t buffer[IP_MAXPACKET + 1];
 
-    ssize_t datagram_len = recvfrom(sockfd, buffer, IP_MAXPACKET, 0, (struct sockaddr *)&sender, &sender_len);
-    if (datagram_len < 0)
+    *datagram_len = recvfrom(sockfd, data, IP_MAXPACKET, 0, (struct sockaddr *)&sender, &sender_len);
+
+    if (*datagram_len < 0)
     {
         fprintf(stderr, "recvfrom error: %s\n", strerror(errno));
         return EXIT_FAILURE;
@@ -98,12 +98,8 @@ bool Transport::receivePacket(int *bytes_received)
 
     char sender_ip_str[20];
     inet_ntop(AF_INET, &(sender.sin_addr), sender_ip_str, sizeof(sender_ip_str));
-    printf("Received UDP packet from IP address: %s, port: %d\n", sender_ip_str, ntohs(sender.sin_port));
 
-    int start;
-    sscanf((const char *)buffer, "DATA %d %d\n", &start, bytes_received);
-
-    buffer[datagram_len] = 0;
+    sscanf((const char *)data, "DATA %d %d\n", start, bytes_received);
 
     return EXIT_SUCCESS;
 }
@@ -116,13 +112,17 @@ void Transport::receiveFile()
         sendDatagram(bytes_read);
         if (receivedInTime())
         {
-            int bytes_received = 0;
-            if (receivePacket(&bytes_received) == EXIT_SUCCESS)
+            int bytes_received = 0, datagram_len =0 , start = 0;
+            char data[1040];
+
+            if (receivePacket(&start, &datagram_len, &bytes_received, data) == EXIT_SUCCESS)
             {
+                if (start != bytes_read) continue;
                 bytes_left -= bytes_received;
                 bytes_read += bytes_received;
+                fwrite(data + datagram_len - bytes_received, sizeof(char), bytes_received, file);
             }
-            cout << "We got " << bytes_left << " bytes left.\n";
         }
     }
+    fclose(file);
 }

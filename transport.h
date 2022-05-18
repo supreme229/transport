@@ -47,9 +47,7 @@ private:
 private:
     int calculateBytes();
     bool receivedInTime();
-    bool receivePacket(int *bytes_received);
-    ofstream file;
+    bool receivePacket(int *start, int *datagram_len,int *bytes_received, char *data);
+    FILE* file;
     int bytes_left;
-
-
 };
