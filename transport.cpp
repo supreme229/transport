@@ -1,6 +1,6 @@
 #include "transport.h"
 
-Transport::Transport(char *argv[]) : ip_addr(argv[1]), port(stoi((string)argv[2])), file_name(argv[3]), file_size(stoi((string)argv[4])), bytes_left(file_size)
+Transport::Transport(char *argv[]) : ip_addr(argv[1]), port(htons(stoi((string)argv[2]))), file_name(argv[3]), file_size(stoi((string)argv[4])), bytes_left(file_size)
 {
     file = fopen(file_name, "w");
 }
@@ -20,8 +20,9 @@ bool Transport::socketSetup()
 bool Transport::serverAddressSetup()
 {
     bzero(&server_address, sizeof(server_address));
+
     server_address.sin_family = AF_INET;
-    server_address.sin_port = htons(port);
+    server_address.sin_port = port;
 
     if (!inet_pton(AF_INET, ip_addr, &server_address.sin_addr))
     {
@@ -87,8 +88,13 @@ bool Transport::receivePacket(int *start, int *datagram_len, int *bytes_received
 {
     struct sockaddr_in sender;
     socklen_t sender_len = sizeof(sender);
-
+    bzero(&sender, sizeof(sender));
     *datagram_len = recvfrom(sockfd, data, IP_MAXPACKET, 0, (struct sockaddr *)&sender, &sender_len);
+
+    if (sender.sin_port != port || strcmp(inet_ntoa(sender.sin_addr), ip_addr) != 0)
+    {
+        return EXIT_FAILURE;
+    }
 
     if (*datagram_len < 0)
     {
@@ -112,12 +118,13 @@ void Transport::receiveFile()
         sendDatagram(bytes_read);
         if (receivedInTime())
         {
-            int bytes_received = 0, datagram_len =0 , start = 0;
+            int bytes_received = 0, datagram_len = 0, start = 0;
             char data[1040];
 
             if (receivePacket(&start, &datagram_len, &bytes_received, data) == EXIT_SUCCESS)
             {
-                if (start != bytes_read) continue;
+                if (start != bytes_read)
+                    continue;
                 bytes_left -= bytes_received;
                 bytes_read += bytes_received;
                 fwrite(data + datagram_len - bytes_received, sizeof(char), bytes_received, file);
