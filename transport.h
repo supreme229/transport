@@ -21,13 +21,17 @@ using namespace std;
 
 class Transport
 {
+    // main build
 public:
     Transport(char *argv[]);
+    bool setup();
     void receiveFile();
-    bool sendWindowDatagrams();
+
+    // data handling
+public:
+    bool sendWindow();
     bool sendSingleDatagram(Segment segment);
     void receiveData();
-    bool setup();
 
     // socket data
 private:
@@ -49,16 +53,14 @@ private:
 
     // file receiving
 private:
-    int calculateBytes();
     bool receivedInTime();
-    bool receivePacket(int *start, int *datagram_len, int *bytes_received, char *data);
+    bool receivePacket(int *start);
     bool isAcked(int start);
     int fd;
     int bytes_left;
 
     // window data
 private:
-    int deleteDatagrams();
     void addDatagrams(int max_new_elements);
     Window w;
     int deleted;

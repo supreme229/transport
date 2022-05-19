@@ -20,4 +20,4 @@ clean:
 	rm -rf *.o 
 
 distclean:
-	rm -rf transport *.o
+	rm -rf transport output *.o

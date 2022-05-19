@@ -6,6 +6,7 @@
 #include <iostream>
 #include <vector>
 #include <string.h>
+#include <unistd.h>
 
 #define MAX_DATA_MESSAGE_LEN 1040 // 1000 (data) + 40 (DATA ... ...)
 #define MAX_DATA_LEN 1000
@@ -24,3 +25,5 @@ struct Segment
 };
 
 bool validateInput(int argc, char *argv[]);
+
+int calculateBytes(int bytes_left, int file_size);

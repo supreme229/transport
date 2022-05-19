@@ -12,10 +12,10 @@ bool Transport::socketSetup()
     if (sockfd < 0)
     {
         fprintf(stderr, "socket error: %s\n", strerror(errno));
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     }
 
-    return EXIT_SUCCESS;
+    return true;
 }
 
 bool Transport::serverAddressSetup()
@@ -27,25 +27,19 @@ bool Transport::serverAddressSetup()
 
     if (!inet_pton(AF_INET, ip_addr, &server_address.sin_addr))
     {
-        return EXIT_FAILURE;
+        fprintf(stderr, "inet_pton error: %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
     }
 
-    return EXIT_SUCCESS;
+    return 1;
 }
 
 bool Transport::setup()
 {
-    if (socketSetup() | serverAddressSetup())
-    {
-        return EXIT_FAILURE;
-    }
+    socketSetup();
+    serverAddressSetup();
 
-    return EXIT_SUCCESS;
-}
-
-int Transport::calculateBytes()
-{
-    return min(bytes_left, min(file_size, MAX_DATA_LEN));
+    return 1;
 }
 
 bool Transport::sendSingleDatagram(Segment segment)
@@ -55,85 +49,21 @@ bool Transport::sendSingleDatagram(Segment segment)
     if (sendto(sockfd, segment.send, message_len, 0, (struct sockaddr *)&server_address, sizeof(server_address)) != message_len)
     {
         fprintf(stderr, "sendto error: %s\n", strerror(errno));
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     }
 
-    return EXIT_SUCCESS;
+    return 1;
 }
 
-bool Transport::sendWindowDatagrams()
+bool Transport::sendWindow()
 {
-    for (int i = 0; i < w.window.size(); i++)
+    for (int i = 0; i < w.getCurrentWindowSize(); i++)
     {
-        if (sendSingleDatagram(w.window[i]) == EXIT_FAILURE)
-            return false;
+        Segment segment = w.getSpecificSegment(i);
+        sendSingleDatagram(segment);
     }
 
-    return true;
-}
-
-int Transport::deleteDatagrams()
-{
-    int elements_deleted = 0;
-
-    while (w.window.size())
-    {
-        if (w.window[0].is_ack)
-        {
-            elements_deleted++;
-
-            write(fd, &w.window[0].data, w.window[0].bytes);
-
-            bytes_left -= w.window[0].bytes;
-
-            w.window.pop_front();
-        }
-        else
-        {
-            break;
-        }
-    }
-
-    w.setDeleted(elements_deleted);
-
-    return elements_deleted;
-}
-
-void Transport::addDatagrams(int max_new_elements)
-{
-    if (w.getBytesLeft() == 0)
-    {
-        return ;
-    }
-
-    int counter = 0;
-
-    for (int i = 0; i < max_new_elements; i++)
-    {
-        int bytes_to_receive = w.calculateBytes(w.getBytesLeft());
-        char message[40];
-
-        int start = w.getStart();
-
-        sprintf(message, "GET %d %d\n", start, bytes_to_receive);
-
-        Segment segment;
-        segment.is_ack = false;
-        segment.bytes = bytes_to_receive;
-        strcpy(segment.send, message);
-        segment.start = start;
-
-        w.window.push_back(segment);
-
-        w.decrementBytesLeft(bytes_to_receive);
-        w.incrementStart(bytes_to_receive);
-
-
-        if (w.getBytesLeft() == 0)
-        {
-            break;
-        }
-    }
+    return 1;
 }
 
 bool Transport::receivedInTime()
@@ -143,98 +73,103 @@ bool Transport::receivedInTime()
 
     struct timeval tv;
     tv.tv_sec = 0;
-    tv.tv_usec = 1000;
+    tv.tv_usec = 500000;
 
     int ready = select(sockfd + 1, &descriptors, NULL, NULL, &tv);
+    if(ready < 0){
+        fprintf(stderr, "select error: %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
 
     if (tv.tv_sec == 0 && tv.tv_usec == 0)
     {
-        return false;
+        return 0;
     }
 
-    return true;
+    return 1;
 }
 
-bool Transport::receivePacket(int *start, int *datagram_len, int *bytes_received, char *data)
+bool Transport::receivePacket(int *start)
 {
     struct sockaddr_in sender;
     socklen_t sender_len = sizeof(sender);
+
+    char data[1040];
+
     bzero(&sender, sizeof(sender));
     bzero(data, 1040);
 
-    *datagram_len = recvfrom(sockfd, data, IP_MAXPACKET, 0, (struct sockaddr *)&sender, &sender_len);
+    int datagram_len = recvfrom(sockfd, data, IP_MAXPACKET, 0, (struct sockaddr *)&sender, &sender_len);
+
+    if (datagram_len < 0)
+    {
+        fprintf(stderr, "recvfrom error: %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
 
     if (sender.sin_port != port || strcmp(inet_ntoa(sender.sin_addr), ip_addr) != 0)
     {
-        return EXIT_FAILURE;
-    }
-
-    if (*datagram_len < 0)
-    {
-        fprintf(stderr, "recvfrom error: %s\n", strerror(errno));
-        return EXIT_FAILURE;
+        return 0;
     }
 
     char sender_ip_str[20];
     inet_ntop(AF_INET, &(sender.sin_addr), sender_ip_str, sizeof(sender_ip_str));
 
-    sscanf((const char *)data, "DATA %d %d\n", start, bytes_received);
+    int bytes_received = 0;
+
+    sscanf((const char *)data, "DATA %d %d\n", start, &bytes_received);
 
     int idx = w.findSegment(*start);
 
     if (idx < 0)
     {
-        return EXIT_FAILURE;
+        return 0;
     }
 
-    int start_point = *datagram_len - *bytes_received;
+    int offset = datagram_len - bytes_received;
 
-    memcpy(w.window[idx].data, &data[start_point], *bytes_received);
+    w.fillSegment(*start, data, offset);
 
-    return EXIT_SUCCESS;
+    return 1;
 }
 
 bool Transport::isAcked(int start)
 {
     int idx = w.findSegment(start);
 
-    if (idx < 0)
-    {
-        throw new invalid_argument("zjebany is acked");
-    }
+    bool is_acked = w.checkSegmentAck(idx);
 
-    if (!w.window[idx].is_ack)
+    if (!is_acked)
     {
-        w.window[idx].is_ack = true;
+        w.switchSegmentAck(idx);
 
         if (idx == 0)
         {
-            int deleted = deleteDatagrams();
-            addDatagrams(deleted);
+            int deleted = w.deleteSegments(fd, &bytes_left);
+
+            if (deleted)
+            {
+                w.addSegments(deleted);
+            }
         }
 
-        return false;
+        return 0;
     }
 
-    return true;
+    return 1;
 }
 
 void Transport::receiveFile()
 {
     while (bytes_left > 0)
     {
-        int start_checker = 0;
-
-        //cout << w.window.size() << endl;
-
-        sendWindowDatagrams();
+        sendWindow();
 
         if (receivedInTime())
         {
-            int bytes_received = 0, datagram_len = 0, start = 0;
-            char data[1040] = "";
+            int start = 0;
 
-            if (receivePacket(&start, &datagram_len, &bytes_received, data) == EXIT_SUCCESS)
+            if (receivePacket(&start))
             {
                 if (isAcked(start))
                 {
@@ -243,5 +178,6 @@ void Transport::receiveFile()
             }
         }
     }
+
     close(fd);
 }

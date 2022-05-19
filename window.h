@@ -1,8 +1,15 @@
 #pragma once
 
 #include <deque>
-#include "utils.h"
 #include <string.h>
+#include <fcntl.h>
+#include <fstream>
+#include <iostream>
+#include <stdlib.h>
+#include <unistd.h>
+#include <cmath>
+
+#include "utils.h"
 
 #define MAX_WINDOW_SIZE 200
 
@@ -10,25 +17,34 @@ using namespace std;
 
 class Window
 {
+    // construction
 public:
     Window(int file_size);
-    int getFirstNotAck();
-    void setSegmentAck(int start);
+
+    // getter
+public:
+    int getCurrentWindowSize();
+
+    // segments operations
+public:
+    Segment getSpecificSegment(int idx);
+    Segment buildSegment();
+    void addSegments(int max_new_elements);
+    int deleteSegments(int fd, int *bytes_left);
     int findSegment(int start);
-    int getStart();
-    void incrementStart(int offset);
-    int getBytesLeft();
-    void decrementBytesLeft(int bytes);
-    int calculateBytes(int bytes_left);
-    void setDeleted(int deleted);
+    void fillSegment(int start, char *data, int off);
+    bool checkSegmentAck(int idx);
+    void switchSegmentAck(int idx);
 
 private:
     int file_size;
     int window_size;
+
+private:
+    deque<Segment> window;
+
+private:
     int start;
     int bytes_left;
     int deleted;
-
-public:
-    deque<Segment> window;
 };
