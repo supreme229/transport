@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <chrono>
+#include <fcntl.h>
 
 #include "window.h"
 
@@ -23,7 +24,8 @@ class Transport
 public:
     Transport(char *argv[]);
     void receiveFile();
-    bool sendDatagram(int *start_checker);
+    bool sendWindowDatagrams();
+    bool sendSingleDatagram(Segment segment);
     void receiveData();
     bool setup();
 
@@ -50,11 +52,14 @@ private:
     int calculateBytes();
     bool receivedInTime();
     bool receivePacket(int *start, int *datagram_len, int *bytes_received, char *data);
-    FILE *file;
+    bool isAcked(int start);
+    int fd;
     int bytes_left;
 
     // window data
 private:
-    Window window;
-    int idx;
+    int deleteDatagrams();
+    void addDatagrams(int max_new_elements);
+    Window w;
+    int deleted;
 };

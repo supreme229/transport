@@ -4,7 +4,7 @@
 #include "utils.h"
 #include <string.h>
 
-#define MAX_WINDOW_SIZE 100
+#define MAX_WINDOW_SIZE 200
 
 using namespace std;
 
@@ -12,15 +12,23 @@ class Window
 {
 public:
     Window(int file_size);
-    char* getSegmentMessage(int idx);
-    int getSegmentBytesToReceive(int idx);
-    int getSegmentStart(int idx);
-    Segment getFirstNotAck();
+    int getFirstNotAck();
     void setSegmentAck(int start);
+    int findSegment(int start);
+    int getStart();
+    void incrementStart(int offset);
+    int getBytesLeft();
+    void decrementBytesLeft(int bytes);
+    int calculateBytes(int bytes_left);
+    void setDeleted(int deleted);
 
 private:
-    int calculateBytes(int bytes_left);
     int file_size;
     int window_size;
+    int start;
+    int bytes_left;
+    int deleted;
+
+public:
     deque<Segment> window;
 };

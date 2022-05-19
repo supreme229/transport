@@ -21,11 +21,7 @@ int main(int argc, char *argv[])
 	if(transport.setup()){
 		return -1;
 	}
-
-	//Window window(stoi(argv[4]));
-
 	
-
 	transport.receiveFile();
 
 	return 0;

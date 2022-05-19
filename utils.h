@@ -4,6 +4,8 @@
 #include <string>
 #include <stdexcept>
 #include <iostream>
+#include <vector>
+#include <string.h>
 
 #define MAX_DATA_MESSAGE_LEN 1040 // 1000 (data) + 40 (DATA ... ...)
 #define MAX_DATA_LEN 1000
@@ -12,7 +14,8 @@
 
 using namespace std;
 
-struct Segment{
+struct Segment
+{
     bool is_ack;
     int bytes;
     int start;
