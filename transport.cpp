@@ -2,7 +2,7 @@
 
 Transport::Transport(char *argv[]) : ip_addr(argv[1]), port(htons(stoi((string)argv[2]))), file_name(argv[3]), file_size(stoi((string)argv[4])), bytes_left(file_size), w(file_size), deleted(0)
 {
-    fd = open(file_name, O_CREAT | O_RDWR | O_TRUNC);
+    fd = open(file_name, O_CREAT | O_RDWR | O_TRUNC, 0666);
 }
 
 bool Transport::socketSetup()
